@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en-US">
+
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,maximum-scale=2">
+    <link rel="stylesheet" type="text/css" media="screen" href="/assets/css/style.css?v=a73250a0a45ef7af8c6290e3ac964bb755b95179">
+
+<!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>GI-blog-post | A blog post about my experience integrating global illumination with DX12</title>
+<meta name="generator" content="Jekyll v3.9.3" />
+<meta property="og:title" content="GI-blog-post" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="A blog post about my experience integrating global illumination with DX12" />
+<meta property="og:description" content="A blog post about my experience integrating global illumination with DX12" />
+<link rel="canonical" href="http://localhost:4000/" />
+<meta property="og:url" content="http://localhost:4000/" />
+<meta property="og:site_name" content="GI-blog-post" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="GI-blog-post" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebSite","description":"A blog post about my experience integrating global illumination with DX12","headline":"GI-blog-post","name":"GI-blog-post","url":"http://localhost:4000/"}</script>
+<!-- End Jekyll SEO tag -->
+
+    <!-- start custom head snippets, customize with your own _includes/head-custom.html file -->
+
+<!-- Setup Google Analytics -->
+
+
+
+<!-- You can set your favicon here -->
+<!-- link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" -->
+
+<!-- end custom head snippets -->
+
+  </head>
+
+  <body>
+
+    <!-- HEADER -->
+    <div id="header_wrap" class="outer">
+        <header class="inner">
+          
+            <a id="forkme_banner" href="https://github.com/KarolinaMot/GI-blog-post">View on GitHub</a>
+          
+
+          <h1 id="project_title">GI-blog-post</h1>
+          <h2 id="project_tagline">A blog post about my experience integrating global illumination with DX12</h2>
+
+          
+        </header>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main_content_wrap" class="outer">
+      <section id="main_content" class="inner">
+        <h2>Introduction</h2>
+<p>Global illumination is a critical component in realistic graphics rendering, as it simulates how light naturally interacts with objects in a scene. As a second-year student at Breda University of Applied Sciences in the Creative Media and Game Technologies program, I had the opportunity to explore this complex topic in a project during the second block of our course. In this blog post, I will share my experience during this project- from implementing a raytracing pipeline using DXR, to the intricacies and challenges of integrating Nvidia’s RTXGI.</p>
+
+<h3>Why RTXGI?</h3>
+<p>While there are quite a few methods of implementing GI, out of my research 3 stuck out the most:</p>
+
+<ul>
+  <li><a href="https://developer.nvidia.com/rtx/ray-tracing/rtxgi">RTXGI by NVIDIA</a></li>
+  <li><a href="https://gamehacker1999.github.io/posts/SSGI/">GI using raymarching</a></li>
+  <li><a href="https://research.nvidia.com/publication/2021-06_restir-gi-path-resampling-real-time-path-tracing">ReSTIR GI</a></li>
+</ul>
+
+<p>After weighing their pros and cons, I decided to go through with RTXGI for this project for three reasons:</p>
+<ol>
+  <li>The algorithm does not leak shadows or light.</li>
+  <li>It is noise free, meaning I would avoid spending time on implementing a denoising algorithm.</li>
+  <li>There is abundant documentation, including a sample project and a integration tutorial on GitHub.</li>
+</ol>
+
+<h3>The DDGI algorithm</h3>
+
+<p>To properly explain the steps I took to integrate RTXGI in my pipeline, I will start with a quick rundown of the algorithm applied by the SDK. 
+The RTXGI SDK uses an algorithm called DDGI, or Dynamic Diffuse Global Illumination. The DDGI algorithm uses a grid of probes to calculate the irradiance. Probes, in this context, are virtual sensors within the scene that gather surrounding diffuse lighting data through ray tracing. In dynamic environments, these probes can be repositioned and their active states adjusted. Thus, the algorithm avoids tracing probe rays that do not contribute to the scene’s lighting. 
+The collected lighting data is stored in an array of textures, where each probe corresponds to a certain number of texels within it. Then, to calculate the lighting at any specific point in the scene, the algorithm interpolates between results from multiple probes. This is done for multiple reasons, such as realism as well as efficiency. 
+Finally, the irradiance data is calculated in screen space, factoring in the camera’s position and the blended irradiance data from the texture array.</p>
+
+<h2>The first step - raytracing support</h2>
+<p>To kickstart my project, the first step was to add raytracing support, needed later to implement RTXGI. I chose to integrate raytracing into my API using NVIDIA’s DXR helpers. This decision allowed me to focus more on global illumination. My primary aim in this step was to achieve a simple, textured scene rendered using raytracing.</p>
+
+<p><b>First step - getting an initial image.</b><br /></p>
+
+<p><img src="assets/images/RaytracingVertices.png" /></p>
+
+<p><b>Second step - getting per-instance data. Here I am rendering the normals.</b><br /></p>
+
+<p><img src="assets/images/RaytracingNormals.png" /></p>
+
+<p><b>Final step - rendering textures.</b><br /></p>
+
+<p><img src="assets/images/RaytracingResult.png" /></p>
+
+<h2>Integrating RTXGI</h2>
+<p>RTXGI integration, as per the SDK documentation, can be categorized into two phases: load-time and run-time. While I was able to implement both, I encountered challenges in regards to the run-time steps, which have yet to be resolved.</p>
+
+<h3>Load-time integration</h3>
+<p>Here’s a step-by-step breakdown of initializing the RTXGI algorithm based on the <a href="https://github.com/NVIDIAGameWorks/RTXGI/blob/main/docs/Integration.md">documentation</a>:</p>
+
+<ol>
+  <li>Compile the SDK’s DDGI shaders with the DirectX Shader Compiler (DXC)</li>
+  <li>Describe the properties of one or more DDGIVolume</li>
+  <li>Describe the resources of one or more DDGIVolume</li>
+  <li>Create the DDGIVolume(s)</li>
+</ol>
+
+<p>Before diving into the volume initialization process, it’s crucial to understand what DDGIVolumes are. According to the documentation, a DDGIVolume is a “defined volume of space that supports irradiance queries at arbitrary world-space locations”. In simpler terms, these volumes define spaces within which the algorithm can query for irradiance. They contain probes, needed to calculate indirect lighting. For this calculation, the SDK requires these resources:
+Probe data texture array - used to save the world offset and classifications of each probe.
+Ray data texture array- used to save the raytraced calculated radiance int the first 3 channels, and the hitT value in the 4th channel.
+Irradiance data texture array - used to store the blended irradiance from the probes.
+Distance data  texture array- used to store the distance data</p>
+
+<p>In terms of resource creation, RTXGI provides two modes: managed and unmanaged. Managed mode, which is what I went with, streamlines the process, as it handles texture creation and management, requiring me only to provide resources and heap slots. This will be important later.</p>
+
+<p>The initial step involved compiling the SDK shaders, guided by the GitHub documentation, as some defines needed to be added before compilation.
+Next, I defined the properties for a    <code class="language-plaintext highlighter-rouge">DDGIVolume::origin</code>, probe spacing, probe count and texture formats. Something I only learned at the end of this project is that it’s important to keep the probe density optimal to avoid visible patterns in the final output. Moreover, adjusting the probeViewBias based on scene scaling is critical to prevent light leaking.</p>
+
+<p><b>Probe grid visualization</b></p>
+
+<p><img src="assets/images/ProbeVisualization.png" /></p>
+
+<h4>Volume description example</h4>
+
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">name</span> <span class="o">=</span> <span class="s">"volume"</span><span class="p">;</span>
+<span class="n">rtxgi</span><span class="o">::</span><span class="n">DDGIVolumeDesc</span> <span class="n">volumeDesc</span><span class="p">{};</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span><span class="p">.</span><span class="n">data</span><span class="p">();</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">rngSeed</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">showProbes</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">eulerAngles</span> <span class="o">=</span> <span class="n">rtxgi</span><span class="o">::</span><span class="n">float3</span><span class="p">(</span><span class="mf">0.</span><span class="n">f</span><span class="p">,</span> <span class="mf">0.</span><span class="n">f</span><span class="p">,</span> <span class="mf">0.</span><span class="n">f</span><span class="p">);</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">origin</span> <span class="o">=</span> <span class="n">rtxgi</span><span class="o">::</span><span class="n">float3</span><span class="p">(</span><span class="o">-</span><span class="mf">0.4</span><span class="n">f</span><span class="p">,</span> <span class="mf">5.4</span><span class="n">f</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.25</span><span class="n">f</span><span class="p">);</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">probeSpacing</span> <span class="o">=</span> <span class="n">rtxgi</span><span class="o">::</span><span class="n">float3</span><span class="p">(</span><span class="mf">5.1</span><span class="n">f</span><span class="p">,</span> <span class="mf">2.5</span><span class="n">f</span><span class="p">,</span><span class="mf">2.25</span><span class="n">f</span><span class="p">);</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">probeCounts</span> <span class="o">=</span> <span class="n">rtxgi</span><span class="o">::</span><span class="n">int3</span><span class="p">(</span><span class="mi">22</span><span class="p">,</span> <span class="mi">22</span><span class="p">,</span> <span class="mi">22</span><span class="p">);</span>
+
+
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">probeNumRays</span> <span class="o">=</span> <span class="mi">256</span><span class="p">;</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">probeNumIrradianceTexels</span> <span class="o">=</span> <span class="mi">8</span><span class="p">;</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">probeNumIrradianceInteriorTexels</span> <span class="o">=</span> <span class="mi">6</span><span class="p">;</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">probeNumDistanceTexels</span> <span class="o">=</span> <span class="mi">16</span><span class="p">;</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">probeNumDistanceInteriorTexels</span> <span class="o">=</span> <span class="mi">14</span><span class="p">;</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">probeHysteresis</span> <span class="o">=</span> <span class="mf">0.97</span><span class="n">f</span><span class="p">;</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">probeNormalBias</span> <span class="o">=</span> <span class="mf">0.1</span><span class="n">f</span><span class="p">;</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">probeViewBias</span> <span class="o">=</span> <span class="mf">0.3</span><span class="n">f</span> <span class="o">*</span><span class="mi">8</span><span class="p">;</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">probeMaxRayDistance</span> <span class="o">=</span> <span class="mi">10000</span><span class="p">;</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">probeIrradianceThreshold</span> <span class="o">=</span> <span class="mf">0.2</span><span class="n">f</span><span class="p">;</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">probeBrightnessThreshold</span> <span class="o">=</span> <span class="mf">1.</span><span class="n">f</span><span class="p">;</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">probeRayDataFormat</span> <span class="o">=</span> <span class="n">rtxgi</span><span class="o">::</span><span class="n">EDDGIVolumeTextureFormat</span><span class="o">::</span><span class="n">F32x4</span><span class="p">;</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">probeIrradianceFormat</span> <span class="o">=</span> <span class="n">rtxgi</span><span class="o">::</span><span class="n">EDDGIVolumeTextureFormat</span><span class="o">::</span><span class="n">F32x4</span><span class="p">;</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">probeDistanceFormat</span> <span class="o">=</span> <span class="n">rtxgi</span><span class="o">::</span><span class="n">EDDGIVolumeTextureFormat</span><span class="o">::</span><span class="n">F16x2</span><span class="p">;</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">probeDataFormat</span> <span class="o">=</span> <span class="n">rtxgi</span><span class="o">::</span><span class="n">EDDGIVolumeTextureFormat</span><span class="o">::</span><span class="n">F16x4</span><span class="p">;</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">probeVariabilityFormat</span> <span class="o">=</span> <span class="n">rtxgi</span><span class="o">::</span><span class="n">EDDGIVolumeTextureFormat</span><span class="o">::</span><span class="n">F16</span><span class="p">;</span>
+
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">probeRelocationEnabled</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">probeMinFrontfaceDistance</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">probeClassificationEnabled</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">probeVariabilityEnabled</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+
+<span class="n">volumeDesc</span><span class="p">.</span><span class="n">movementType</span> <span class="o">=</span> <span class="n">rtxgi</span><span class="o">::</span><span class="n">EDDGIVolumeMovementType</span><span class="o">::</span><span class="n">Default</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p>Describing the <code class="language-plaintext highlighter-rouge">rtxgi::d3d12::DDGIVolumeResources</code> structure was the next challenge, especially since managed mode is less documented. First of all, I had to fill the <code class="language-plaintext highlighter-rouge">rtxgi::d3d12::DDGIVolumeResources::managed</code> values. Here I provided the previously compiled shader buffers as well as a device and finally enabled managed mode. After this I needed to provide a few more things:</p>
+<ol>
+  <li>A sampler heap</li>
+  <li>A resource heap</li>
+  <li>A resource for the volume constants</li>
+  <li>An upload resource for the volume constants</li>
+</ol>
+
+<p>Since the SDK relies on the heaps provided by the application, it’s crucial for the application to accurately pass the index slots of each managed resource along with the resources created in the heap. This ensures the SDK allocates them correctly. To handle this, I track the last used slot in a heap with and int and then add to it whenever I need to allocate a new resource. To help with this, the SDK provides a helper function that specifies the required number of textures for each texture array <code class="language-plaintext highlighter-rouge">rtxgi::GetDDGIVolumeNumTex2DArrayDescriptors()</code>.</p>
+
+<h4>Usage example</h4>
+
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">volume</span><span class="p">.</span><span class="n">resourceIndices</span><span class="p">.</span><span class="n">probeDataSRVIndex</span> <span class="o">=</span> <span class="n">heapResourceIDCount</span><span class="p">;</span>
+<span class="n">raytracing</span><span class="o">::</span><span class="n">resourceIndices</span><span class="p">.</span><span class="n">probeDataUAVIndex</span> <span class="o">=</span> <span class="n">raytracing</span><span class="o">::</span><span class="n">resourceIndices</span><span class="p">.</span><span class="n">probeDataSRVIndex</span> <span class="o">+</span> <span class="n">rtxgi</span><span class="o">::</span><span class="n">GetDDGIVolumeNumTex2DArrayDescriptors</span><span class="p">();</span>
+<span class="n">raytracing</span><span class="o">::</span><span class="n">resourceIndices</span><span class="p">.</span><span class="n">probeDistanceSRVIndex</span> <span class="o">=</span> <span class="n">raytracing</span><span class="o">::</span><span class="n">resourceIndices</span><span class="p">.</span><span class="n">probeDataUAVIndex</span> <span class="o">+</span> <span class="n">rtxgi</span><span class="o">::</span><span class="n">GetDDGIVolumeNumTex2DArrayDescriptors</span><span class="p">();</span>
+<span class="o">&lt;</span><span class="p">...</span><span class="o">&gt;</span>
+<span class="n">heapResourceIDCount</span><span class="o">+=</span><span class="n">rtxgi</span><span class="o">::</span><span class="n">GetDDGIVolumeNumTex2DArrayDescriptors</span><span class="p">()</span> <span class="o">*</span><span class="mi">12</span><span class="p">;</span> 
+</code></pre></div></div>
+<p>Finally, I created the volume using <code class="language-plaintext highlighter-rouge">rtxgi::d3d12::DDGIVolume::Create()</code>, which returns whether the volume has been initialised properly.</p>
+
+<h3>Run-time integration</h3>
+<p>Run-time integration proved more complex. The steps include:</p>
+
+<ol>
+  <li>Updating and uploading constants for each volume</li>
+  <li>Tracing probe rays</li>
+  <li>Updating probes with raytraced data</li>
+  <li>Querying irradiance.</li>
+</ol>
+
+<p>First step is just calling DDGIVolume::Update() and UploadDDGIVolumeConstants(). The latter again returns an enum stating whether the update was successful.</p>
+
+<p>The SDK does not provide a ray generation shader, thus I wrote one myself. Thankfully, the documentation gives a guideline of what this shader should do, and the sample project also has a ray generation shader which I heavily referenced while writing mine.</p>
+
+<p><b>Results from raytracing probe rays</b></p>
+
+<p><img src="assets/images/RaytraceData.png" /></p>
+
+<p>The third step is managed by the SDK and it is called by rtxgi::d3d12::UpdateDDGIVolumeProbes(). This function dispatches two compute shaders - the irradiance blending shader, and the distance blending shader. These two shaders will update and record data into the irradiance and distance textures respectively.</p>
+
+<p><b>Blended distance results</b></p>
+
+<p><img src="assets/images/BlendedData.png" /></p>
+
+<p><b>Blended irradiance results</b></p>
+
+<p><img src="assets/images/IrradianceData.png" /></p>
+
+<p>The final step is querying the irradiance. Again, the sdk does not provide a shader, but the sample project does have a compute shader for this, so I heavily based mine off of it. It is important to note that one does not need to complete this step with a compute shader, as this can be done with a pixel shader. That said, I was on a time crunch, therefore I decided that referencing an already made shader would be easier than researching how could I use a pixel shader for this. Unfortunately, something I only realised later into the project, is that a GBuffer is needed when performing this step with a compute shader, which I did not until this point. Nevertheless, I quickly created 3 more textures, into which I rasterized the normals, vertex positions and albedo - the only data that the shader needs. Once I had all the “ingredients”, writing the shader was not difficult.</p>
+
+<p>After debugging on Pix and making sure all the resources were being bound correctly, and adjusting the probes, I was left with this irradiance data:</p>
+
+<p><b>Irradiance result for cornel box</b></p>
+
+<p><img src="assets/images/IrradianceDataCornell.png" /></p>
+
+<p><b>Cornell box with direct lighting only </b></p>
+
+<p><img src="assets/images/DirectCornell.png" /></p>
+
+<p><b>Irradiance result for Sponza</b></p>
+
+<p><img src="assets/images/SponzaIrradiance.png" /></p>
+
+<p><b>Sponza with direct lighting only</b></p>
+
+<p><img src="assets/images/SponzaDirect.png" /></p>
+
+<h2>Issues</h2>
+<p>As I mentioned before, I was not able to complete my goals for this block. Despite some success, there are clear issues within the results - the indirect lighting from the Sponza model is way darker than it should be, and the green wall in the Cornell box does not affect the irradiance result at all, unlike the red one. This suggests potential issues in the shader responsible for tracing probe rays.</p>
+
+<h2>Future plans </h2>
+<p>Going forward, my focus is on resolving these irradiance issues. I suspect the problem lies in the ray generation shader,, so my debugging will start there. Additionally, I plan to explore optimizations and fixes suggested in the RTXGI documentation, like probe relocation and classification.</p>
+
+
+      </section>
+    </div>
+
+    <!-- FOOTER  -->
+    <div id="footer_wrap" class="outer">
+      <footer class="inner">
+        
+        <p class="copyright">GI-blog-post maintained by <a href="https://github.com/KarolinaMot">KarolinaMot</a></p>
+        
+        <p>Published with <a href="https://pages.github.com">GitHub Pages</a></p>
+      </footer>
+    </div>
+  </body>
+</html>
