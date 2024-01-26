@@ -151,7 +151,11 @@ The third step is managed by the SDK and it is called by rtxgi::d3d12::UpdateDDG
 
 The final step is querying the irradiance. Again, the sdk does not provide a shader, but the sample project does have a compute shader for this, so I heavily based mine off of it. It is important to note that one does not need to complete this step with a compute shader, as this can be done with a pixel shader. That said, I was on a time crunch, therefore I decided that referencing an already made shader would be easier than researching how could I use a pixel shader for this. Unfortunately, something I only realised later into the project, is that a GBuffer is needed when performing this step with a compute shader, which I did not until this point. Nevertheless, I quickly created 3 more textures, into which I rasterized the normals, vertex positions and albedo - the only data that the shader needs. Once I had all the “ingredients”, writing the shader was not difficult.
 
-After debugging on Pix and making sure all the resources were being bound correctly, and adjusting the probes, I was left with this irradiance data:
+After debugging on Pix and making sure all the resources were being bound correctly, and carefully adjusting the probes, I finally got the irradiance data saved in the appropriate texture. Once this was done, all I had left to do was sum it with the direct lighting. These are the results:
+
+<b>Cornell box with GI</b>
+<img src="assets/images/GICornell.png">
+
 
 <b>Irradiance result for cornel box</b>
 
@@ -161,19 +165,18 @@ After debugging on Pix and making sure all the resources were being bound correc
 
 <img src="assets/images/DirectCornell.png">
 
-<b>Irradiance result for Sponza</b>
 
+
+<h2>Summary</h2>
+
+In this blog post I have gone through all the steps I have taken to intergrate RTXGI. While I managed to get global illumination, I was not able to do the optional steps that the documentation suggested. This means that I cannot use GI on more complicated scenes, as without relocation and classification probes will end up inside meshes. This causes very dark results.
+
+<b>Sponza's irradiance calculations are dark, as a lot of probes are inside walls and columns.</b>
 <img src="assets/images/SponzaIrradiance.png">
 
-<b>Sponza with direct lighting only</b>
-
-<img src="assets/images/SponzaDirect.png">
-
-
-<h2>Issues</h2>
-As I mentioned before, I was not able to complete my goals for this block. Despite some success, there are clear issues within the results - the indirect lighting from the Sponza model is way darker than it should be, and the green wall in the Cornell box does not affect the irradiance result at all, unlike the red one. This suggests potential issues in the shader responsible for tracing probe rays.
 
 <h2>Future plans </h2>
-Going forward, my focus is on resolving these irradiance issues. I suspect the problem lies in the ray generation shader,, so my debugging will start there. Additionally, I plan to explore optimizations and fixes suggested in the RTXGI documentation, like probe relocation and classification.
+Going forward, I will want to finish this project by adding the optional steps of probe relocation and classification. While I tried to do that at the end of the block, I couldn't manage to get the appropriate shaders working, therefore the ProbeData texture was always black.
+Another thing I would like to implement is the ability to modify the probe grid and volume thresholds through a GUI window. One of the most anoying things about working with the SDK was making sure the probes were positioned correctly, especially when I had relocation and classification disabled. For this reason, I believe it will be a very useful addition to my project. 
 
 
