@@ -48,10 +48,11 @@ Here’s a step-by-step breakdown of initializing the RTXGI algorithm based on t
 4. Create the DDGIVolume(s)
 
 Before diving into the volume initialization process, it's crucial to understand what DDGIVolumes are. According to the documentation, a DDGIVolume is a “defined volume of space that supports irradiance queries at arbitrary world-space locations”. In simpler terms, these volumes define spaces within which the algorithm can query for irradiance. They contain probes, needed to calculate indirect lighting. For this calculation, the SDK requires these resources:
-Probe data texture array - used to save the world offset and classifications of each probe.
-Ray data texture array- used to save the raytraced calculated radiance int the first 3 channels, and the hitT value in the 4th channel.
-Irradiance data texture array - used to store the blended irradiance from the probes.
-Distance data  texture array- used to store the distance data 
+
+- Probe data texture array - used to save the world offset and classifications of each probe.
+- Ray data texture array- used to save the raytraced calculated radiance int the first 3 channels, and the hitT value in the 4th channel.
+- Irradiance data texture array - used to store the blended irradiance from the probes.
+- Distance data  texture array- used to store the distance data 
 
 In terms of resource creation, RTXGI provides two modes: managed and unmanaged. Managed mode, which is what I went with, streamlines the process, as it handles texture creation and management, requiring me only to provide resources and heap slots. This will be important later.
 
