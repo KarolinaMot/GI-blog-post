@@ -1,5 +1,5 @@
 <h2>Introduction</h2>
-<p>Global illumination is a critical component in realistic graphics rendering, as it simulates how light naturally interacts with objects in a scene. As a second-year student at Breda University of Applied Sciences in the Creative Media and Game Technologies program, I had the opportunity to explore this complex topic in a project during the second block of our course. In this blog post, I will share my experience during this project- from implementing a raytracing pipeline using DXR, to the intricacies and challenges of integrating Nvidia’s RTXGI.</p>
+<p>Global illumination is a critical component in realistic graphics rendering, as it simulates how light naturally interacts with objects in a scene. As a second-year student at Breda University of Applied Sciences in the game programming discipline, I had the opportunity to explore this complex topic in a project during the second block of our course. In this blog post, I will share my experience during this project- from implementing a raytracing pipeline using DXR, to the intricacies and challenges of integrating Nvidia’s RTXGI.</p>
 
 <h3>Why RTXGI?</h3>
 While there are quite a few methods of implementing GI, out of my research 3 stuck out the most:
