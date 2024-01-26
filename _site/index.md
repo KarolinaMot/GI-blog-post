@@ -1,5 +1,5 @@
 <h2>Introduction</h2>
-<p>Global illumination is a critical component in realistic graphics rendering, as it simulates how light naturally interacts with objects in a scene. As a second-year student at Breda University of Applied Sciences in the Creative Media and Game Technologies program, I had the opportunity to explore this complex topic in a project during the second block of our course. In this blog post, I will share my experience during this project- from implementing a raytracing pipeline using DXR, to the intricacies and challenges of integrating Nvidia’s RTXGI.</p>
+<p>Global illumination is a critical component in realistic graphics rendering, as it simulates how light naturally interacts with objects in a scene. As a second-year student at Breda University of Applied Sciences in the game programming discipline, I had the opportunity to explore this complex topic in a project during the second block of our course. In this blog post, I will share my experience during this project- from implementing a raytracing pipeline using DXR, to the intricacies and challenges of integrating Nvidia’s RTXGI.</p>
 
 <h3>Why RTXGI?</h3>
 While there are quite a few methods of implementing GI, out of my research 3 stuck out the most:
@@ -48,10 +48,11 @@ Here’s a step-by-step breakdown of initializing the RTXGI algorithm based on t
 4. Create the DDGIVolume(s)
 
 Before diving into the volume initialization process, it's crucial to understand what DDGIVolumes are. According to the documentation, a DDGIVolume is a “defined volume of space that supports irradiance queries at arbitrary world-space locations”. In simpler terms, these volumes define spaces within which the algorithm can query for irradiance. They contain probes, needed to calculate indirect lighting. For this calculation, the SDK requires these resources:
-Probe data texture array - used to save the world offset and classifications of each probe.
-Ray data texture array- used to save the raytraced calculated radiance int the first 3 channels, and the hitT value in the 4th channel.
-Irradiance data texture array - used to store the blended irradiance from the probes.
-Distance data  texture array- used to store the distance data 
+
+- Probe data texture array - used to save the world offset and classifications of each probe.
+- Ray data texture array- used to save the raytraced calculated radiance int the first 3 channels, and the hitT value in the 4th channel.
+- Irradiance data texture array - used to store the blended irradiance from the probes.
+- Distance data  texture array- used to store the distance data 
 
 In terms of resource creation, RTXGI provides two modes: managed and unmanaged. Managed mode, which is what I went with, streamlines the process, as it handles texture creation and management, requiring me only to provide resources and heap slots. This will be important later.
 
@@ -149,7 +150,7 @@ The third step is managed by the SDK and it is called by rtxgi::d3d12::UpdateDDG
 <img src="assets/images/IrradianceData.png">
 
 
-The final step is querying the irradiance. Again, the sdk does not provide a shader, but the sample project does have a compute shader for this, so I heavily based mine off of it. It is important to note that one does not need to complete this step with a compute shader, as this can be done with a pixel shader. That said, I was on a time crunch, therefore I decided that referencing an already made shader would be easier than researching how could I use a pixel shader for this. Unfortunately, something I only realised later into the project, is that a GBuffer is needed when performing this step with a compute shader, which I did not until this point. Nevertheless, I quickly created 3 more textures, into which I rasterized the normals, vertex positions and albedo - the only data that the shader needs. Once I had all the “ingredients”, writing the shader was not difficult.
+The final step is querying the irradiance. Again, the sdk does not provide a shader, but the sample project does have a compute shader for this, so I heavily based mine off of it. It is important to note that one does not need to complete this step with a compute shader, as this can be done with a pixel shader. That said, I was on a time crunch, therefore I decided that referencing an already made shader would be easier than researching how could I use a pixel shader for this. Unfortunately, something I only realised later into the project, is that a GBuffer is needed when performing this step with a compute shader, which I did not have until this point. Nevertheless, I quickly created 3 more textures, into which I rasterized the normals, vertex positions and albedo - the only data that the shader needs. Once I had all the “ingredients”, writing the shader was not difficult.
 
 After debugging on Pix and making sure all the resources were being bound correctly, and carefully adjusting the probes, I finally got the irradiance data saved in the appropriate texture. Once this was done, all I had left to do was sum it with the direct lighting. These are the results:
 
